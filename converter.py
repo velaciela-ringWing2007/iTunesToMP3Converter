@@ -1,11 +1,12 @@
 import os
 import shutil
 import subprocess
+from threading import Thread
 from mutagen.easyid3 import EasyID3
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, scrolledtext
 
 
 # GUI部分
@@ -32,6 +33,9 @@ class ConverterApp:
 
         tk.Button(self.root, text="Start Conversion", command=self.start_conversion).pack(pady=20)
 
+        self.log_text = scrolledtext.ScrolledText(self.root, width=80, height=20)
+        self.log_text.pack(pady=10)
+
     def select_source(self):
         self.source_dir = filedialog.askdirectory()
         if self.source_dir:
@@ -47,8 +51,9 @@ class ConverterApp:
             messagebox.showerror("Error", "Please select both source and target directories")
             return
 
-        process_directory(self.source_dir, self.target_dir)
-        messagebox.showinfo("Success", "Conversion completed successfully")
+        self.log_text.delete(1.0, tk.END)
+        thread = Thread(target=process_directory, args=(self.source_dir, self.target_dir, self.log_text))
+        thread.start()
 
 
 # 関数部分
@@ -83,7 +88,7 @@ def convert_to_mp3(src_file, dst_file, bitrate='192k'):
     subprocess.run(command, check=True)
 
 
-def process_directory(src_dir, dst_dir):
+def process_directory(src_dir, dst_dir, log_widget):
     for root, _, files in os.walk(src_dir):
         relative_path = os.path.relpath(root, src_dir)
         target_path = os.path.join(dst_dir, relative_path)
@@ -91,17 +96,26 @@ def process_directory(src_dir, dst_dir):
 
         for file in files:
             src_file = os.path.join(root, file)
+            parent_dir = os.path.basename(os.path.dirname(src_file))
+            display_name = f"{parent_dir}/{file}"
             try:
                 if file.lower().endswith('.mp3'):
                     dst_file = os.path.join(target_path, file)
+                    log_widget.insert(tk.END, f"Copying {display_name}\n")
+                    log_widget.see(tk.END)
                     shutil.copy2(src_file, dst_file)
                     copy_metadata(src_file, dst_file)
                 elif file.lower().endswith('.m4a'):
                     dst_file = os.path.join(target_path, os.path.splitext(file)[0] + '.mp3')
+                    log_widget.insert(tk.END, f"Converting {display_name}\n")
+                    log_widget.see(tk.END)
                     convert_to_mp3(src_file, dst_file)
                     copy_mp4_metadata(src_file, dst_file)
             except Exception as e:
-                print(f"Skipping file {src_file}: {e}")
+                log_widget.insert(tk.END, f"Skipping {display_name}: {e}\n")
+                log_widget.see(tk.END)
+    log_widget.insert(tk.END, "Conversion completed successfully.\n")
+    log_widget.see(tk.END)
 
 
 # GUIの実行部分
