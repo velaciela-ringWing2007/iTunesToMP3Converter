@@ -101,19 +101,23 @@ def process_directory(src_dir, dst_dir, log_widget):
             try:
                 if file.lower().endswith('.mp3'):
                     dst_file = os.path.join(target_path, file)
-                    log_widget.insert(tk.END, f"Copying {display_name}\n")
-                    log_widget.see(tk.END)
-                    shutil.copy2(src_file, dst_file)
-                    copy_metadata(src_file, dst_file)
+                    if os.path.exists(dst_file):
+                        log_widget.insert(tk.END, f"Skipping {display_name}: already exists\n")
+                    else:
+                        log_widget.insert(tk.END, f"Copying {display_name}\n")
+                        shutil.copy2(src_file, dst_file)
+                        copy_metadata(src_file, dst_file)
                 elif file.lower().endswith('.m4a'):
                     dst_file = os.path.join(target_path, os.path.splitext(file)[0] + '.mp3')
-                    log_widget.insert(tk.END, f"Converting {display_name}\n")
-                    log_widget.see(tk.END)
-                    convert_to_mp3(src_file, dst_file)
-                    copy_mp4_metadata(src_file, dst_file)
+                    if os.path.exists(dst_file):
+                        log_widget.insert(tk.END, f"Skipping {display_name}: already exists\n")
+                    else:
+                        log_widget.insert(tk.END, f"Converting {display_name}\n")
+                        convert_to_mp3(src_file, dst_file)
+                        copy_mp4_metadata(src_file, dst_file)
             except Exception as e:
                 log_widget.insert(tk.END, f"Skipping {display_name}: {e}\n")
-                log_widget.see(tk.END)
+            log_widget.see(tk.END)
     log_widget.insert(tk.END, "Conversion completed successfully.\n")
     log_widget.see(tk.END)
 
