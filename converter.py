@@ -1,8 +1,9 @@
 import os
 import shutil
-import ffmpeg
+import subprocess
 from mutagen.easyid3 import EasyID3
 from mutagen.mp3 import MP3
+from mutagen.mp4 import MP4
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
@@ -61,17 +62,25 @@ def copy_metadata(src, dst):
     audio.save(dst, v2_version=3)
 
 
+def copy_mp4_metadata(src, dst):
+    src_audio = MP4(src)
+    dst_audio = MP3(dst, ID3=EasyID3)
+    for key in src_audio.tags:
+        try:
+            if key.startswith("©"):
+                dst_audio[key[1:]] = src_audio.tags[key]
+            else:
+                dst_audio[key] = src_audio.tags[key]
+        except Exception as e:
+            print(f"Skipping metadata key {key}: {e}")
+    dst_audio.save(v2_version=3)
+
+
 def convert_to_mp3(src_file, dst_file, bitrate='192k'):
-    src_audio = MP3(src_file, ID3=EasyID3)
-    src_metadata = {key: src_audio.get(key, [None])[0] for key in src_audio.keys()}
-
-    ffmpeg.input(src_file).output(dst_file, audio_bitrate=bitrate).run()
-
-    dst_audio = MP3(dst_file, ID3=EasyID3)
-    for key, value in src_metadata.items():
-        if value:
-            dst_audio[key] = value
-    dst_audio.save()
+    command = [
+        'ffmpeg', '-i', src_file, '-b:a', bitrate, '-y', dst_file
+    ]
+    subprocess.run(command, check=True)
 
 
 def process_directory(src_dir, dst_dir):
@@ -82,15 +91,17 @@ def process_directory(src_dir, dst_dir):
 
         for file in files:
             src_file = os.path.join(root, file)
-            if file.lower().endswith('.mp3'):
-                dst_file = os.path.join(target_path, file)
-                shutil.copy2(src_file, dst_file)
-                copy_metadata(src_file, dst_file)
-            else:
-                dst_file = os.path.join(target_path, os.path.splitext(file)[0] + '.mp3')
-                src_audio = MP3(src_file)
-                bitrate = src_audio.info.bitrate if hasattr(src_audio.info, 'bitrate') else 192000
-                convert_to_mp3(src_file, dst_file, bitrate=str(bitrate) + 'k')
+            try:
+                if file.lower().endswith('.mp3'):
+                    dst_file = os.path.join(target_path, file)
+                    shutil.copy2(src_file, dst_file)
+                    copy_metadata(src_file, dst_file)
+                elif file.lower().endswith('.m4a'):
+                    dst_file = os.path.join(target_path, os.path.splitext(file)[0] + '.mp3')
+                    convert_to_mp3(src_file, dst_file)
+                    copy_mp4_metadata(src_file, dst_file)
+            except Exception as e:
+                print(f"Skipping file {src_file}: {e}")
 
 
 # GUIの実行部分
